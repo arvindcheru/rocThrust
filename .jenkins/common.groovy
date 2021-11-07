@@ -4,7 +4,7 @@
 def runCompileCommand(platform, project, jobName, boolean debug=false, boolean sameOrg=true)
 {
     project.paths.construct_build_prefix()
-        
+
     String buildTypeArg = debug ? '-DCMAKE_BUILD_TYPE=Debug' : '-DCMAKE_BUILD_TYPE=Release'
     String buildTypeDir = debug ? 'debug' : 'release'
     String cmake = platform.jenkinsLabel.contains('centos') ? 'cmake3' : 'cmake'
@@ -22,7 +22,7 @@ def runCompileCommand(platform, project, jobName, boolean debug=false, boolean s
                 ${cmake} -DCMAKE_CXX_COMPILER=/opt/rocm/bin/hipcc ${buildTypeArg} ${amdgpuTargets} -DBUILD_TEST=ON -DBUILD_BENCHMARK=ON ../..
                 make -j\$(nproc)
                 """
-    
+
     platform.runCommand(this, command)
 }
 
@@ -32,12 +32,25 @@ def runTestCommand (platform, project)
     String centos = platform.jenkinsLabel.contains('centos') ? '3' : ''
 
     def testCommand = "ctest${centos} --output-on-failure"
-    def command = """#!/usr/bin/env bash
-                set -x
-                cd ${project.paths.project_build_prefix}
-                cd ${project.testDirectory}
-                ${sudo} LD_LIBRARY_PATH=/opt/rocm/lib ${testCommand}
-            """
+    def hmmTestCommand = ''
+
+    if (platform.jenkinsLabel.contains('gfx90a'))
+    {
+        hmmTestCommand = """
+                            export HSA_XNACK=1
+                            export ROCTHRUST_USE_HMM=1
+                            ${testCommand} -R device_ptr.hip
+                         """
+    }
+
+    def command = """
+                    #!/usr/bin/env bash
+                    set -x
+                    cd ${project.paths.project_build_prefix}
+                    cd ${project.testDirectory}
+                    ${testCommand}
+                    ${hmmTestCommand}
+                  """
 
     platform.runCommand(this, command)
 }

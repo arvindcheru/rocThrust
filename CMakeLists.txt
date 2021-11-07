@@ -34,7 +34,7 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE CACHE BOOL "Add paths to linker searc
 
 # rocm-cmake contains common cmake code for rocm projects to help
 # setup and install
-find_package( ROCM CONFIG )
+include( cmake/FindROCMCmake.cmake )
 include( ROCMSetupVersion )
 include( ROCMCreatePackage )
 include( ROCMInstallTargets )
@@ -67,9 +67,13 @@ else()
 endif()
 set(AMDGPU_TARGETS "${DEFAULT_AMDGPU_TARGETS}" CACHE STRING "List of specific machine types for library to target")
 
-# Verify that hcc or hipcc compiler is used on ROCM platform
-include(cmake/VerifyCompiler.cmake)
+# Get dependencies
+include(cmake/Dependencies.cmake)
 
+# Verify that hcc or hipcc compiler is used on ROCM platform
+if (NOT WIN32)
+  include(cmake/VerifyCompiler.cmake)
+endif()
 # Build options
 # Disable -Werror
 option(DISABLE_WERROR "Disable building with Werror" ON)
@@ -78,6 +82,7 @@ option(BUILD_EXAMPLES "Build examples" OFF)
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(DOWNLOAD_ROCPRIM "Download rocPRIM and do not search for rocPRIM package" OFF)
 option(BUILD_ADDRESS_SANITIZER "Build with address sanitizer enabled" OFF)
+option(ENABLE_UPSTREAM_TESTS "Enable upstream tests" OFF)
 
 set(RNG_SEED_COUNT 0 CACHE STRING "Number of true random sequences to test each input size for")
 set(PRNG_SEEDS 1 CACHE STRING "Seeds of pseudo random sequences to test each input size for")
@@ -102,12 +107,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(DISABLE_WERROR)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra ")
 else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror")
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --save-temps")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+
+if (WIN32)
+  add_compile_options(-xhip)
+  add_compile_definitions(THRUST_IGNORE_DEPRECATED_CPP_DIALECT)
+endif()
 
 # Address Sanitizer
 if(BUILD_ADDRESS_SANITIZER)
@@ -115,9 +125,6 @@ if(BUILD_ADDRESS_SANITIZER)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -shared-libasan")
   add_link_options(-fuse-ld=lld)
 endif()
-
-# Get dependencies
-include(cmake/Dependencies.cmake)
 
 # Setup VERSION
 rocm_setup_version(VERSION "2.10.9")
@@ -131,8 +138,14 @@ add_subdirectory(thrust)
 
 # Tests
 if(BUILD_TEST)
+  if (ENABLE_UPSTREAM_TESTS)
+    enable_testing()
+  endif()
   # We still want the testing to be compiled to catch some errors
-  add_subdirectory(testing)
+  #TODO: Get testing folder working with HIP on Windows
+  if (NOT WIN32)
+    add_subdirectory(testing)
+  endif()
   enable_testing()
   add_subdirectory(test)
 endif()
@@ -153,16 +166,16 @@ set(THRUST_OPTIONS_RELEASE ${THRUST_OPTIONS_WARNINGS})
 # Package
 set(CPACK_DEBIAN_ARCHIVE_TYPE "gnutar")
 
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocprim (>= 2.10.1)") # 1.5.18263 is HIP version in ROCm 1.8.2
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocprim-dev (>= 2.10.1)") # 1.5.18263 is HIP version in ROCm 1.8.2
 set(CPACK_DEBIAN_PACKAGE_CONFLICTS "hip-thrust, thrust")
 set(CPACK_RPM_PACKAGE_CONFLICTS "hip-thrust, thrust")
-set(CPACK_RPM_PACKAGE_REQUIRES "rocprim >= 2.10.1")
+set(CPACK_RPM_PACKAGE_REQUIRES "rocprim-devel >= 2.10.1")
 
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 
-if(NOT CPACK_PACKAGING_INSTALL_PREFIX)
-  set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
-endif()
+# if(NOT CPACK_PACKAGING_INSTALL_PREFIX)
+#   set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
+# endif()
 
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "\${CPACK_PACKAGING_INSTALL_PREFIX}" "\${CPACK_PACKAGING_INSTALL_PREFIX}/include")
 
@@ -170,4 +183,5 @@ rocm_create_package(
   NAME rocthrust
   DESCRIPTION "Radeon Open Compute Thrust library"
   MAINTAINER "rocthrust-maintainer@amd.com"
+  HEADER_ONLY
 )
