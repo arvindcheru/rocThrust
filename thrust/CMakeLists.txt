@@ -17,7 +17,7 @@ target_include_directories(rocthrust
   INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
-    $<INSTALL_INTERFACE:include/>
+    $<INSTALL_INTERFACE:rocthrust/include/>
 )
 
 target_link_libraries(rocthrust
@@ -34,6 +34,7 @@ set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR})
 # does not support header-only libraries (INTERFACE targets)
 rocm_install_targets(
   TARGETS rocthrust
+  PREFIX rocthrust
 )
 if(CMAKE_VERSION VERSION_LESS 3.7)
   # Workaround: old versions of CMake do not support set(CPACK_DEBIAN_ARCHIVE_TYPE "gnutar")
@@ -45,7 +46,7 @@ rocm_install(
   DIRECTORY
     "./"
     "${PROJECT_BINARY_DIR}/thrust/include/"
-  DESTINATION include/thrust
+  DESTINATION rocthrust/include/thrust
   FILES_MATCHING
   PATTERN "*.h"
   PATTERN "*.cuh"
@@ -60,7 +61,10 @@ include(ROCMExportTargetsHeaderOnly)
 # Export targets
 rocm_export_targets_header_only(
   TARGETS roc::rocthrust
+  PREFIX rocthrust
   DEPENDS PACKAGE rocprim
   NAMESPACE roc::
 )
 
+# Create symlinks
+rocm_install_symlink_subdir(rocthrust)
